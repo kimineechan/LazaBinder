@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	"lazarusbinder/internal/bundle"
-	"lazarusbinder/internal/launch"
-	"lazarusbinder/internal/winui"
+	"lazabinder/internal/bundle"
+	"lazabinder/internal/launch"
+	"lazabinder/internal/winui"
 )
 
 func main() {
@@ -29,7 +29,7 @@ func run() error {
 	}
 	a, err := bundle.Open(self)
 	if err != nil {
-		return fmt.Errorf("this EXE needs a bundle created by LazarusBinder: %w", err)
+		return fmt.Errorf("this EXE needs a bundle created by LazaBinder: %w", err)
 	}
 	defer a.Close()
 	m := a.Manifest
@@ -46,7 +46,7 @@ func run() error {
 	if err != nil {
 		return fmt.Errorf("could not prepare programs: %w", err)
 	}
-	root := filepath.Join(cache, "LazarusBinder", "Runs")
+	root := filepath.Join(cache, "LazaBinder", "Runs")
 	if err := os.MkdirAll(root, 0700); err != nil {
 		return fmt.Errorf("could not prepare programs: %w", err)
 	}

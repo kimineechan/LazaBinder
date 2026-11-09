@@ -5,9 +5,9 @@ package main
 import (
 	_ "embed"
 	"fmt"
-	"lazarusbinder/internal/bundle"
-	"lazarusbinder/internal/icons"
-	"lazarusbinder/internal/winui"
+	"lazabinder/internal/bundle"
+	"lazabinder/internal/icons"
+	"lazabinder/internal/winui"
 	"os"
 	"path/filepath"
 	"strings"
@@ -24,12 +24,12 @@ const iconFilter = "Windows icons (*.ico)\x00*.ico\x00\x00"
 const resourceFilter = "Windows programs and libraries\x00*.exe;*.dll\x00\x00"
 
 func main() {
-	w, err := winui.New("LazarusBinder | bundle programs and manage icons", 880, 620)
+	w, err := winui.New("LazaBinder | bundle programs and manage icons", 880, 620)
 	if err != nil {
 		winui.Fatal(err)
 		return
 	}
-	w.Title("LazarusBinder", 28, 20, 430, 42)
+	w.Title("LazaBinder", 28, 20, 430, 42)
 	w.Label("Two programs. One EXE. Your icon.", 29, 67, 760, 26)
 	var nav []uintptr
 	for i, label := range []string{"01  Bundle programs", "02  Set bundle icon", "03  Extract icons"} {
@@ -150,14 +150,14 @@ func main() {
 
 	w.Page(1)
 	w.Heading("Give your bundle a new icon", 28, 177, 700, 30)
-	w.Label("Choose a LazarusBinder bundle and save a new copy with a different Windows icon.", 28, 213, 815, 30)
+	w.Label("Choose a LazaBinder bundle and save a new copy with a different Windows icon.", 28, 213, 815, 30)
 	w.Label("Bundle EXE", 28, 270, 110, 26)
 	bound := w.Edit("", 143, 265, 566, 32, true)
 	jobs = append(jobs, w.Button("Browse...", 721, 264, 130, 34, func() {
-		if path := choose("Choose a LazarusBinder bundle", exeFilter, "exe"); path != "" {
+		if path := choose("Choose a LazaBinder bundle", exeFilter, "exe"); path != "" {
 			a, e := bundle.Open(path)
 			if e != nil {
-				w.Alert("Choose a LazarusBinder bundle", e.Error())
+				w.Alert("Choose a LazaBinder bundle", e.Error())
 				return
 			}
 			a.Close()
@@ -211,7 +211,7 @@ func main() {
 		}
 		g := groups[i]
 		w.SetText(summary, g.Label+"\nSizes: "+g.Sizes)
-		temp, e := os.CreateTemp("", "lazarusbinder-preview-*.ico")
+		temp, e := os.CreateTemp("", "lazabinder-preview-*.ico")
 		if e != nil {
 			return
 		}

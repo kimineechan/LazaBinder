@@ -70,7 +70,7 @@ try {
     }
     $gitRoot = Invoke-Query -Program 'git' -Arguments @('rev-parse', '--show-toplevel')
     if ($gitRoot.ExitCode -ne 0 -or [System.IO.Path]::GetFullPath($gitRoot.Output.Trim()) -ne $repoRoot) {
-        throw 'The Git checkout root must be this LazarusBinder folder.'
+        throw 'The Git checkout root must be this LazaBinder folder.'
     }
     $branch = Invoke-Query -Program 'git' -Arguments @('branch', '--show-current')
     if ($branch.ExitCode -ne 0 -or $branch.Output.Trim() -ne 'main') {
@@ -99,7 +99,7 @@ try {
     Invoke-Checked -Program 'git' -Arguments @('add', '--all')
     $staged = Invoke-Query -Program 'git' -Arguments @('diff', '--cached', '--quiet')
     if ($staged.ExitCode -eq 1) {
-        Invoke-Checked -Program 'git' -Arguments @('commit', '-m', 'Prepare LazarusBinder for public release')
+        Invoke-Checked -Program 'git' -Arguments @('commit', '-m', 'Prepare LazaBinder for public release')
     } elseif ($staged.ExitCode -ne 0) {
         throw 'Could not check staged changes.'
     }
@@ -142,7 +142,7 @@ try {
                 throw "$tag points to a different commit. Use a new version rather than moving a released tag."
             }
         } else {
-            Invoke-Checked -Program 'git' -Arguments @('tag', '-a', $tag, '-m', "LazarusBinder $tag")
+            Invoke-Checked -Program 'git' -Arguments @('tag', '-a', $tag, '-m', "LazaBinder $tag")
         }
         Invoke-Checked -Program 'git' -Arguments @('push', 'origin', $tag)
         Write-Host "Pushed $tag. GitHub Actions will publish the ZIP and checksums after both test jobs pass."

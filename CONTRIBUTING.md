@@ -1,10 +1,10 @@
 # Contributing
 
-Thanks for helping improve LazarusBinder.
+Thanks for helping improve LazaBinder.
 
 ## Report a problem
 
-Use the bug-report form and include the Windows version, LazarusBinder version, launch mode, administrator setting, and steps to reproduce. Quote any error text. A small public standalone test application is useful when a problem depends on the input program.
+Use the bug-report form and include the Windows version, LazaBinder version, launch mode, administrator setting, and steps to reproduce. Quote any error text. A small public standalone test application is useful when a problem depends on the input program.
 
 For feature requests, describe the workflow and the result you want.
 
@@ -20,14 +20,14 @@ go test ./internal/...
 
 Format Go changes with `gofmt`. On Windows, run `build.cmd` before submitting a change. It generates both embedded launcher templates, exercises Win32 resource updates, builds the editor, runs `go vet`, and verifies the generated files.
 
-The generated files `cmd/lazarusbinder/launcher.exe` and `launcher-admin.exe` are build inputs and are not committed. Build them through the script before testing or compiling the Windows editor directly.
+The generated files `cmd/lazabinder/launcher.exe` and `launcher-admin.exe` are build inputs and are not committed. Build them through the script before testing or compiling the Windows editor directly.
 
 To regenerate icon/manifest resources after changing their source assets:
 
 ```sh
-python scripts/make_resources.py assets/lazarusbinder.ico assets/app.manifest assets/launcher-normal.syso
-python scripts/make_resources.py assets/lazarusbinder.ico assets/launcher-admin.manifest assets/launcher-admin.syso
-python scripts/make_resources.py assets/lazarusbinder.ico assets/app.manifest cmd/lazarusbinder/resources_windows_amd64.syso
+python scripts/make_resources.py assets/lazabinder.ico assets/app.manifest assets/launcher-normal.syso
+python scripts/make_resources.py assets/lazabinder.ico assets/launcher-admin.manifest assets/launcher-admin.syso
+python scripts/make_resources.py assets/lazabinder.ico assets/app.manifest cmd/lazabinder/resources_windows_amd64.syso
 ```
 
 Keep `cmd/launcher/resources_windows_amd64.syso` equal to the ordinary launcher resource object between builds.

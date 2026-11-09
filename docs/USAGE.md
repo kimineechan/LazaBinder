@@ -1,11 +1,11 @@
-# LazarusBinder usage guide
+# LazaBinder usage guide
 
 A portable Windows application that packages **two standalone EXEs into one combined EXE**, applies a custom icon to it, and extracts complete ICO files from EXE/DLL resources.
 
 ## Start here
 
 1. Extract this ZIP to a folder on your PC.
-2. Open `LazarusBinder.exe`.
+2. Open `LazaBinder.exe`.
 3. Choose one of the three sections.
 
 The app targets **64-bit Windows 10 and Windows 11**. You do not need Go, Node, Python or an installer to use the supplied EXE. Programs you bundle may still need their own external runtime installed.
@@ -21,17 +21,17 @@ The app targets **64-bit Windows 10 and Windows 11**. You do not need Go, Node, 
 
 Double-click the resulting EXE. It verifies and extracts both programs, then starts them automatically **without an extra launcher window**. When both have started, the combined EXE exits and the programs continue running. Only the programs' own windows and any required Windows administrator prompt appear during successful startup. They remain two separate Windows processes; their machine code is not merged. Startup failures still show an error dialog.
 
-Each program is extracted into its own folder under `%LOCALAPPDATA%\LazarusBinder\Runs\run-...`, preserving its original filename. Its working directory is that folder. Open that path in Explorer to inspect the extracted copies. The original EXEs stay unchanged.
+Each program is extracted into its own folder under `%LOCALAPPDATA%\LazaBinder\Runs\run-...`, preserving its original filename. Its working directory is that folder. Open that path in Explorer to inspect the extracted copies. The original EXEs stay unchanged.
 
 In sequential mode, the combined EXE waits in the background for the first process to exit, starts program 2, then exits. It does not track any detached child processes that application creates.
 
-**Updating an older combined EXE:** create a new bundle from the original two EXEs using this updated LazarusBinder. Existing bundles keep their original launcher code; changing only their icon does not apply this startup update.
+**Updating an older combined EXE:** create a new bundle from the original two EXEs using this updated LazaBinder. Existing bundles keep their original launcher code; changing only their icon does not apply this startup update.
 
 ### Administrator access on the final combined EXE
 
 With **Require administrator for the combined EXE** checked, the final `Combined.exe` contains a Windows manifest with `requestedExecutionLevel="requireAdministrator"`. Open that file normally. Windows handles the administrator consent or credentials before the launcher starts. After approval, it launches both embedded programs from the elevated process, so both inherit administrator rights. This allows the embedded app that requires administrator access to start with those rights; the other app also runs elevated.
 
-The original two EXEs are unchanged. The administrator requirement belongs to the generated combined EXE. The LazarusBinder builder itself uses `asInvoker` and does not need elevation to create a bundle in a writable folder.
+The original two EXEs are unchanged. The administrator requirement belongs to the generated combined EXE. The LazaBinder builder itself uses `asInvoker` and does not need elevation to create a bundle in a writable folder.
 
 Cancelling the combined EXE's elevation request prevents the launcher and both embedded programs from starting. Windows' UAC configuration determines whether a prompt appears. Uncheck the setting to generate an ordinary `asInvoker` launcher instead.
 
@@ -39,11 +39,11 @@ Rebuild an existing bundle to add this embedded administrator requirement. You c
 
 ## 02 — Set bundle icon
 
-1. Choose an EXE previously created by LazarusBinder.
+1. Choose an EXE previously created by LazaBinder.
 2. Choose a new `.ico` file.
 3. Click **Save EXE with new icon** and choose a different output filename.
 
-This section saves a new bundle copy. It changes the launcher's Windows icon and keeps both embedded EXEs intact. It supports LazarusBinder bundles, including bundles copied to another computer. It does not edit arbitrary third-party EXEs.
+This section saves a new bundle copy. It changes the launcher's Windows icon and keeps both embedded EXEs intact. It supports LazaBinder bundles, including bundles copied to another computer. It does not edit arbitrary third-party EXEs.
 
 If Explorer still shows a cached icon, try the new output filename or refresh its folder. Multi-resolution ICOs generally display more cleanly than a single small image.
 

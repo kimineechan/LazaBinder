@@ -4,23 +4,23 @@ package bundle
 
 import (
 	"bytes"
-	"lazarusbinder/internal/icons"
-	"lazarusbinder/internal/pecheck"
+	"lazabinder/internal/icons"
+	"lazabinder/internal/pecheck"
 	"os"
 	"path/filepath"
 	"testing"
 )
 
 func TestWindowsIconUpdatePreservesBundle(t *testing.T) {
-	template := os.Getenv("LAZARUSBINDER_TEST_ADMIN_EXE")
+	template := os.Getenv("LAZABINDER_TEST_ADMIN_EXE")
 	if template == "" {
-		t.Skip("set LAZARUSBINDER_TEST_EXE to test icon updates on a compiled bundle")
+		t.Skip("set LAZABINDER_TEST_EXE to test icon updates on a compiled bundle")
 	}
 	stub, e := os.ReadFile(template)
 	if e != nil {
 		t.Fatal(e)
 	}
-	iconPath := filepath.Join("..", "..", "assets", "lazarusbinder.ico")
+	iconPath := filepath.Join("..", "..", "assets", "lazabinder.ico")
 	paths, _ := inputs(t)
 	root := t.TempDir()
 	original := filepath.Join(root, "original.exe")

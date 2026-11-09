@@ -1,16 +1,16 @@
-# Publish LazarusBinder on GitHub
+# Publish LazaBinder on GitHub
 
 ## Repository settings
 
 | Setting | Value |
 | --- | --- |
 | Owner | `kimineechan` |
-| Name | `LazarusBinder` |
+| Name | `LazaBinder` |
 | Visibility | Public |
 | Default branch | `main` |
 | Licence | MIT |
 | First release tag | `v1.0.0` |
-| First release title | `LazarusBinder v1.0.0` |
+| First release title | `LazaBinder v1.0.0` |
 
 **Description**
 
@@ -30,7 +30,7 @@ These settings are also stored in `.github/repository.json`. GitHub does not app
 
 Install [Git for Windows](https://git-scm.com/download/win) and [GitHub CLI](https://cli.github.com/). Reopen PowerShell after installation.
 
-In the extracted `LazarusBinder` folder:
+In the extracted `LazaBinder` folder:
 
 ```powershell
 gh auth login --hostname github.com --git-protocol https --web --scopes workflow
@@ -42,7 +42,7 @@ Use the GitHub account `kimineechan` when signing in. Authentication is handled 
 The script:
 
 1. Initializes a Git repository in this project folder and commits the source and documentation.
-2. Creates the public `kimineechan/LazarusBinder` repository and pushes `main`.
+2. Creates the public `kimineechan/LazaBinder` repository and pushes `main`.
 3. Adds the description and topics, enables issues, and sets the default branch.
 4. Creates and pushes the annotated `v1.0.0` tag.
 5. Prints the repository, Actions, and Releases links.
@@ -63,13 +63,13 @@ The script can reuse a matching repository after a partially completed attempt. 
 
 ## Alternative: upload using GitHub's website
 
-1. Create a public repository named **LazarusBinder** at [github.com/new](https://github.com/new). Paste the description above. Leave README, licence, and gitignore initialization unchecked because these files are included.
-2. Upload the **contents** of the extracted `LazarusBinder` folder, including `.github`, `assets`, `cmd`, `internal`, `scripts`, `docs`, and root files. Omit `dist`, generated EXEs, and ZIP files. Keep `go.mod` and `README.md` at the repository root.
+1. Create a public repository named **LazaBinder** at [github.com/new](https://github.com/new). Paste the description above. Leave README, licence, and gitignore initialization unchecked because these files are included.
+2. Upload the **contents** of the extracted `LazaBinder` folder, including `.github`, `assets`, `cmd`, `internal`, `scripts`, `docs`, and root files. Omit `dist`, generated EXEs, and ZIP files. Keep `go.mod` and `README.md` at the repository root.
 3. Add the topics above in the repository's About settings.
 4. Check the first **Build and release** run in Actions.
-5. Create a release with tag **v1.0.0**, target **main**, and title **LazarusBinder v1.0.0**.
+5. Create a release with tag **v1.0.0**, target **main**, and title **LazaBinder v1.0.0**.
 6. Paste the contents of `docs/releases/v1.0.0.md`.
-7. Attach `dist/LazarusBinder-v1.0.0-windows-x64.zip` and `dist/SHA256SUMS.txt`, then publish the release.
+7. Attach `dist/LazaBinder-v1.0.0-windows-x64.zip` and `dist/SHA256SUMS.txt`, then publish the release.
 
 The prepared ZIP contains the same Windows EXE that was tested successfully. It is an asset for Releases; it is not a replacement for uploading the source repository.
 
@@ -80,7 +80,7 @@ The prepared ZIP contains the same Windows EXE that was tested successfully. It 
 3. Create and push the matching version tag:
 
 ```powershell
-git tag -a v1.0.1 -m "LazarusBinder v1.0.1"
+git tag -a v1.0.1 -m "LazaBinder v1.0.1"
 git push origin v1.0.1
 ```
 

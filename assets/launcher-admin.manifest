@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">
-  <assemblyIdentity version="1.0.0.0" processorArchitecture="amd64" name="LazarusBinder" type="win32"/>
-  <description>LazarusBinder visible application launcher and icon tools</description>
+  <assemblyIdentity version="1.0.0.0" processorArchitecture="amd64" name="LazaBinder" type="win32"/>
+  <description>LazaBinder visible application launcher and icon tools</description>
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v3"><security><requestedPrivileges>
     <requestedExecutionLevel level="requireAdministrator" uiAccess="false"/>
   </requestedPrivileges></security></trustInfo>

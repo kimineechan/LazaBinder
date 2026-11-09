@@ -11,7 +11,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"lazarusbinder/internal/pecheck"
+	"lazabinder/internal/pecheck"
 	"os"
 	"path/filepath"
 	"strings"
@@ -21,7 +21,7 @@ const magic = "TWINFORGE-PACK1!" // Preserve compatibility with existing bundles
 const footerSize = 24            // 8-byte archive length followed by the 16-byte marker.
 const MaxProgramSize int64 = 1 << 30
 
-var ErrNotBundle = errors.New("this file is not a LazarusBinder bundle")
+var ErrNotBundle = errors.New("this file is not a LazaBinder bundle")
 
 type Program struct {
 	Name       string `json:"name"`
@@ -142,9 +142,9 @@ func Build(stub []byte, paths [2]string, options Options, output string, setIcon
 		return fmt.Errorf("bundle title must be 120 characters or fewer")
 	}
 	if strings.TrimSpace(title) == "" {
-		title = "LazarusBinder bundle"
+		title = "LazaBinder bundle"
 	}
-	temp, err := os.CreateTemp(filepath.Dir(output), ".lazarusbinder-*.exe")
+	temp, err := os.CreateTemp(filepath.Dir(output), ".lazabinder-*.exe")
 	if err != nil {
 		return err
 	}
@@ -373,7 +373,7 @@ func Retouch(source, output string, setIcon func(string) error) error {
 		return err
 	}
 	defer a.Close()
-	temp, err := os.CreateTemp(filepath.Dir(output), ".lazarusbinder-icon-*.exe")
+	temp, err := os.CreateTemp(filepath.Dir(output), ".lazabinder-icon-*.exe")
 	if err != nil {
 		return err
 	}

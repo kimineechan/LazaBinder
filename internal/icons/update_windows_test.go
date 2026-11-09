@@ -10,9 +10,9 @@ import (
 )
 
 func TestWindowsResourceUpdate(t *testing.T) {
-	template := os.Getenv("LAZARUSBINDER_TEST_EXE")
+	template := os.Getenv("LAZABINDER_TEST_EXE")
 	if template == "" {
-		t.Skip("set LAZARUSBINDER_TEST_EXE to the compiled launcher to test Win32 resource updates")
+		t.Skip("set LAZABINDER_TEST_EXE to the compiled launcher to test Win32 resource updates")
 	}
 	data, e := os.ReadFile(template)
 	if e != nil {

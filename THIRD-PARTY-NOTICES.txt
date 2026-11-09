@@ -1,7 +1,7 @@
 Go runtime and standard library
 
 The Windows executable includes the Go runtime and standard library.
-Their licence notice follows. LazarusBinder project code is licensed
+Their licence notice follows. LazaBinder project code is licensed
 under the MIT licence in LICENSE.
 
 Copyright 2009 The Go Authors.

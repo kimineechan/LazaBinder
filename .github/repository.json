@@ -1,6 +1,6 @@
 {
   "owner": "kimineechan",
-  "name": "LazarusBinder",
+  "name": "LazaBinder",
   "visibility": "public",
   "description": "Portable Windows utility to bundle two standalone EXEs, set custom icons, and extract icons from EXE/DLL files.",
   "topics": [

@@ -7,7 +7,7 @@ import (
 	"encoding/binary"
 	"fmt"
 	"image/png"
-	"lazarusbinder/internal/pecheck"
+	"lazabinder/internal/pecheck"
 	"os"
 	"sort"
 	"unicode/utf16"

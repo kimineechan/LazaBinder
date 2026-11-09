@@ -56,9 +56,9 @@ jobs:
           if ($LASTEXITCODE -ne 0) { throw 'Release packaging failed.' }
       - uses: actions/upload-artifact@v4
         with:
-          name: LazarusBinder-windows-x64
+          name: LazaBinder-windows-x64
           path: |
-            dist/LazarusBinder-v*-windows-x64.zip
+            dist/LazaBinder-v*-windows-x64.zip
             dist/SHA256SUMS.txt
           if-no-files-found: error
           retention-days: 14
@@ -75,7 +75,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/download-artifact@v4
         with:
-          name: LazarusBinder-windows-x64
+          name: LazaBinder-windows-x64
           path: release
       - name: Publish Windows ZIP and checksums
         env:
@@ -83,8 +83,8 @@ jobs:
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
           gh release create "$RELEASE_TAG" \
-            release/LazarusBinder-v*-windows-x64.zip release/SHA256SUMS.txt \
+            release/LazaBinder-v*-windows-x64.zip release/SHA256SUMS.txt \
             --verify-tag --repo "$GITHUB_REPOSITORY" \
-            --title "LazarusBinder $RELEASE_TAG" \
+            --title "LazaBinder $RELEASE_TAG" \
             --notes-file "docs/releases/$RELEASE_TAG.md"
 

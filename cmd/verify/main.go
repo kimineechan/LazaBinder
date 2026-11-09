@@ -4,9 +4,9 @@ package main
 import (
 	"bytes"
 	"fmt"
-	"lazarusbinder/internal/bundle"
-	"lazarusbinder/internal/icons"
-	"lazarusbinder/internal/pecheck"
+	"lazabinder/internal/bundle"
+	"lazabinder/internal/icons"
+	"lazabinder/internal/pecheck"
 	"os"
 	"path/filepath"
 )
@@ -20,9 +20,9 @@ func main() {
 }
 
 func check() error {
-	stubPath := "cmd/lazarusbinder/launcher.exe"
-	adminStubPath := "cmd/lazarusbinder/launcher-admin.exe"
-	appPath := "dist/LazarusBinder.exe"
+	stubPath := "cmd/lazabinder/launcher.exe"
+	adminStubPath := "cmd/lazabinder/launcher-admin.exe"
+	appPath := "dist/LazaBinder.exe"
 	for _, path := range []string{stubPath, adminStubPath, appPath} {
 		if e := bundle.ValidateEXE(path); e != nil {
 			return fmt.Errorf("%s: %w", path, e)
@@ -70,7 +70,7 @@ func checkBundle(template string, inputs [2]string, requireAdmin bool) error {
 	if e != nil {
 		return e
 	}
-	dir, e := os.MkdirTemp("", "lazarusbinder-verify-")
+	dir, e := os.MkdirTemp("", "lazabinder-verify-")
 	if e != nil {
 		return e
 	}

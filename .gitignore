@@ -1,7 +1,7 @@
 /dist/
 /release/
-/cmd/lazarusbinder/launcher.exe
-/cmd/lazarusbinder/launcher-admin.exe
+/cmd/lazabinder/launcher.exe
+/cmd/lazabinder/launcher-admin.exe
 *.test.exe
 *.exe
 *.zip

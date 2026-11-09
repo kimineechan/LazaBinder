@@ -30,10 +30,10 @@ def main():
     if args.tag is not None and args.tag != "v" + version:
         parser.error("The release tag must match VERSION (expected v" + version + ").")
 
-    exe = root / "dist" / "LazarusBinder.exe"
+    exe = root / "dist" / "LazaBinder.exe"
     notes = root / "docs" / "releases" / ("v" + version + ".md")
     files = [
-        ("LazarusBinder.exe", exe),
+        ("LazaBinder.exe", exe),
         ("README.md", root / "README.md"),
         ("LICENSE", root / "LICENSE"),
         ("THIRD-PARTY-NOTICES.txt", root / "THIRD-PARTY-NOTICES.txt"),
@@ -45,25 +45,25 @@ def main():
         ("docs/GITHUB.md", root / "docs/GITHUB.md"),
         ("docs/releases/v" + version + ".md", notes),
         ("assets/logo.svg", root / "assets/logo.svg"),
-        ("assets/lazarusbinder.ico", root / "assets/lazarusbinder.ico"),
+        ("assets/lazabinder.ico", root / "assets/lazabinder.ico"),
     ]
     for _, source in files:
         if not source.is_file():
             parser.error("Missing release input: " + str(source))
     if exe.stat().st_size == 0:
-        parser.error("LazarusBinder.exe is empty. Build the app first.")
+        parser.error("LazaBinder.exe is empty. Build the app first.")
 
     output = args.output_dir.resolve()
     output.mkdir(parents=True, exist_ok=True)
-    zip_path = output / ("LazarusBinder-v" + version + "-windows-x64.zip")
+    zip_path = output / ("LazaBinder-v" + version + "-windows-x64.zip")
     exe_hash = sha256(exe)
-    with tempfile.NamedTemporaryFile(prefix="lazarusbinder-release-", suffix=".zip", dir=output, delete=False) as stream:
+    with tempfile.NamedTemporaryFile(prefix="lazabinder-release-", suffix=".zip", dir=output, delete=False) as stream:
         temporary = Path(stream.name)
     try:
         with zipfile.ZipFile(temporary, "w", zipfile.ZIP_DEFLATED, compresslevel=7) as archive:
             for name, source in files:
-                archive.write(source, "LazarusBinder/" + name)
-            archive.writestr("LazarusBinder/SHA256SUMS.txt", exe_hash + "  LazarusBinder.exe\n")
+                archive.write(source, "LazaBinder/" + name)
+            archive.writestr("LazaBinder/SHA256SUMS.txt", exe_hash + "  LazaBinder.exe\n")
         with zipfile.ZipFile(temporary) as archive:
             damaged = archive.testzip()
             if damaged is not None:
@@ -74,7 +74,7 @@ def main():
 
     checksums = (
         sha256(zip_path) + "  " + zip_path.name + "\n"
-        + exe_hash + "  LazarusBinder.exe\n"
+        + exe_hash + "  LazaBinder.exe\n"
     )
     (output / "SHA256SUMS.txt").write_bytes(checksums.encode("ascii"))
     print("Created " + str(zip_path))

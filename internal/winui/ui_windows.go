@@ -127,7 +127,7 @@ func New(title string, width, height int) (*Window, error) {
 		result, _, _ := user32.NewProc("DefWindowProcW").Call(hwnd, uintptr(msg), wp, lp)
 		return result
 	})
-	className := ptr("LazarusBinderNativeWindow")
+	className := ptr("LazaBinderNativeWindow")
 	class := windowClass{Style: 3, Procedure: w.callback, Instance: instance, Icon: icon, SmallIcon: icon, Cursor: cursor, Background: brush, ClassName: className}
 	class.Size = uint32(unsafe.Sizeof(class))
 	ok, _, e := user32.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
@@ -367,5 +367,5 @@ func (w *Window) OpenFolder(path string) {
 }
 
 func Fatal(err error) {
-	user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(ptr(err.Error()))), uintptr(unsafe.Pointer(ptr("LazarusBinder"))), 0x10)
+	user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(ptr(err.Error()))), uintptr(unsafe.Pointer(ptr("LazaBinder"))), 0x10)
 }

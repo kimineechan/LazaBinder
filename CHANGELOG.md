@@ -1,5 +1,11 @@
 # Changelog
 
+## 1.0.1 — 2026-11-09
+
+Renamed the project from LazarusBinder to LazaBinder.
+
+- Rename the application, Go module, build and publish scripts, documentation, GitHub metadata, and release assets to LazaBinder. No functional changes.
+
 ## 1.0.0 — 2026-10-14
 
 First public release.

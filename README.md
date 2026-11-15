@@ -13,6 +13,8 @@
 
 [Download the latest Windows release](https://github.com/kimineechan/LazaBinder/releases/latest) · [Usage guide](docs/USAGE.md) · [Report a bug](https://github.com/kimineechan/LazaBinder/issues/new/choose)
 
+<p align="center"><img src="docs/screenshots/bundle.png" width="960" alt="LazaBinder with two programs, a bundle name and an icon chosen. The window is black and see-through, over a colourful desktop"></p>
+
 ## Features
 
 | Feature | What it does |
@@ -22,6 +24,7 @@
 | Administrator support | Make the final combined EXE request administrator access through Windows UAC |
 | Custom icons | Choose an ICO when bundling, or save an existing bundle with a new icon |
 | Extract icons | Export individual or all icon groups from EXE/DLL resources, preserving their resolutions |
+| Dark, see-through window | Black, with rounded controls and a blurred view of what is behind it. LazaBinder draws it itself, with no web view or interface toolkit |
 | Portable and local | Native Windows interface, no installer, network client, or telemetry |
 
 The combined EXE starts the programs **without an extra launcher window**. It exits after startup while the applications continue running. In sequential mode, it waits in the background for the first process to finish before starting the second.

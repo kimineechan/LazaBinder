@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.1.0 - 2026-11-15
+
+A new window, in the style of LazaReplay and LazaScrub. Bundles are made exactly as before.
+
+- The window is black and see-through, with what is behind it blurred, and has rounded buttons, switches in place of tick boxes, and its own list of icon groups, which scrolls when a program holds many.
+- Keyboard use throughout: Tab and Shift + Tab move between controls with a white ring to show where you are, Enter or Space presses, and Ctrl + Tab changes section.
+- The button for the thing to do next is the light one.
+- The window is drawn by LazaBinder itself, only where something changed. No web view, no third-party modules, CGO still off.
+- The launcher that goes into every bundle no longer carries any of the window code.
+
 ## 1.0.1 — 2026-11-09
 
 Renamed the project from LazarusBinder to LazaBinder.

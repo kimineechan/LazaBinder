@@ -35,3 +35,8 @@ Use two small standalone applications to check:
 
 A native Windows desktop was not available in the build environment. Interactive dialogs, UAC behavior, and compatibility beyond the maintainer's reported scenario still need native Windows verification.
 
+## The window of 1.1.0
+
+Version 1.1.0 replaced the window with one LazaBinder draws itself. On Windows 10 build 19045 at 100% scale the three sections were worked through their real dialogs with sample files: two programs were bundled with a name typed in and an icon chosen, the bundle was given a new icon, and the icon groups of a program were listed and one chosen. The build script, which also makes and checks bundles, passed.
+
+The drawing code, the colours and the way the controls answer the keyboard and the pointer are covered by tests in `internal/winui`. Not checked: Windows 11, other display scales, and a screen reader, which cannot read a window that draws its own controls.

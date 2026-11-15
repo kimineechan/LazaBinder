@@ -1,34 +1,80 @@
 //go:build windows
 
 // Package winui provides a small native Win32 interface without third-party dependencies.
+//
+// The window is black and see-through, with rounded controls. Windows has
+// no controls of that kind, so the package draws its own: the whole window
+// is one picture in memory, redrawn only where something changed and handed
+// to Windows, which blurs what is behind it. Nothing is drawn while the
+// window is hidden or minimised.
 package winui
 
 import (
 	"fmt"
 	"math"
+	"os"
 	"runtime"
+	"strconv"
 	"sync"
 	"syscall"
 	"unicode/utf16"
 	"unsafe"
 )
 
-var user32 = syscall.NewLazyDLL("user32.dll")
-var kernel32 = syscall.NewLazyDLL("kernel32.dll")
-var gdi32 = syscall.NewLazyDLL("gdi32.dll")
-var comdlg32 = syscall.NewLazyDLL("comdlg32.dll")
-var shell32 = syscall.NewLazyDLL("shell32.dll")
+var (
+	user32   = syscall.NewLazyDLL("user32.dll")
+	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	gdi32    = syscall.NewLazyDLL("gdi32.dll")
+	shell32  = syscall.NewLazyDLL("shell32.dll")
+	ole32    = syscall.NewLazyDLL("ole32.dll")
 
-var createWindow = user32.NewProc("CreateWindowExW")
-var sendMessage = user32.NewProc("SendMessageW")
-var postMessage = user32.NewProc("PostMessageW")
-var showWindow = user32.NewProc("ShowWindow")
-var enableWindow = user32.NewProc("EnableWindow")
-var setText = user32.NewProc("SetWindowTextW")
-var getText = user32.NewProc("GetWindowTextW")
-var getTextLength = user32.NewProc("GetWindowTextLengthW")
-var loadImage = user32.NewProc("LoadImageW")
-var destroyIcon = user32.NewProc("DestroyIcon")
+	createWindow    = user32.NewProc("CreateWindowExW")
+	defWindowProc   = user32.NewProc("DefWindowProcW")
+	postMessage     = user32.NewProc("PostMessageW")
+	showWindow      = user32.NewProc("ShowWindow")
+	loadImage       = user32.NewProc("LoadImageW")
+	isWindowVisible = user32.NewProc("IsWindowVisible")
+	isIconic        = user32.NewProc("IsIconic")
+	setForeground   = user32.NewProc("SetForegroundWindow")
+	getWindowRect   = user32.NewProc("GetWindowRect")
+	setWindowPos    = user32.NewProc("SetWindowPos")
+	getKeyState     = user32.NewProc("GetKeyState")
+	setTimer        = user32.NewProc("SetTimer")
+	killTimer       = user32.NewProc("KillTimer")
+	setCapture      = user32.NewProc("SetCapture")
+	releaseCapture  = user32.NewProc("ReleaseCapture")
+	trackMouse      = user32.NewProc("TrackMouseEvent")
+)
+
+// Window messages.
+const (
+	wmDestroy        = 0x0002
+	wmSize           = 0x0005
+	wmActivate       = 0x0006
+	wmClose          = 0x0010
+	wmEraseBackdrop  = 0x0014
+	wmDrawItem       = 0x002B
+	wmMeasureItem    = 0x002C
+	wmKeyDown        = 0x0100
+	wmChar           = 0x0102
+	wmSysKeyDown     = 0x0104
+	wmSysChar        = 0x0106
+	wmSysCommand     = 0x0112
+	wmTimer          = 0x0113
+	wmMouseMove      = 0x0200
+	wmLButtonDown    = 0x0201
+	wmLButtonUp      = 0x0202
+	wmLButtonDouble  = 0x0203
+	wmCaptureChanged = 0x0215
+	wmEnterSizeMove  = 0x0231
+	wmExitSizeMove   = 0x0232
+	wmMouseWheel     = 0x020A
+	wmMouseLeave     = 0x02A3
+	wmHotkey         = 0x0312
+	wmJobs           = 0x8001 // WM_APP + 1: run the functions queued by Post
+	wmTray           = 0x8002 // WM_APP + 2: the notification area icon was used
+	wmSignal         = 0x8003 // WM_APP + 3: another copy of the program asks for something
+)
 
 type point struct{ X, Y int32 }
 type rect struct{ Left, Top, Right, Bottom int32 }
@@ -49,27 +95,80 @@ type windowClass struct {
 	SmallIcon                          uintptr
 }
 
+// Window is the program's one window.
 type Window struct {
-	Handle                       uintptr
-	scale                        float64
-	font, titleFont, headingFont uintptr
-	controls                     []uintptr
-	pages                        map[int][]uintptr
-	page                         int
-	nextID                       uintptr
-	actions                      map[uintptr]func()
-	notifications                map[uintptr]func()
-	jobs                         []func()
-	lock                         sync.Mutex
-	icons                        map[uintptr]uintptr
-	callback                     uintptr
+	Handle        uintptr
+	instance      uintptr
+	scale         float64
+	width, height int // in the units of the layout, before scaling
+
+	canvas  *Canvas
+	picture *surface // what the canvas draws on
+	stencil *surface // where Windows draws text, to be coloured in on the canvas
+	fonts   struct{ body, strong, small, heading, title uintptr }
+	sheet   Colour  // the background in use
+	frosted bool    // Windows blurs what is behind the window
+	corner  float64 // how round the window's own corners are, in pixels
+	build   uint32  // the build number of Windows
+
+	controls []*Control
+	page     int // the page controls are being added to, or -1 for every page
+	current  int // the page on show
+	grip     int // the window can be dragged by its top, down to here
+	stale    rect
+	drawn    bool // the window has been handed to Windows at least once
+
+	hover, pressed, focus *Control
+	keyboard              bool     // the focus was moved with the keyboard, so it is ringed
+	active                bool     // the window is the one in front
+	tracking              bool     // Windows will say when the pointer leaves
+	dragging              bool     // the window is being moved by its top
+	gripX, gripY          int      // the point of the window the pointer holds it by
+	open                  *Control // the list that is showing its entries
+	pick                  int      // the entry of that list the pointer or the keyboard is on
+	first                 int      // the first entry of that list on show, when it is too long to show whole
+
+	shown          func(page int)
+	drop           func(paths []string)
+	tick           func()
+	interval       int
+	signal         func(command int)
+	hotkey         func(id int)
+	closing        func() bool
+	tray           *tray
+	taskbarCreated uint32
+	jobs           []func()
+	lock           sync.Mutex
+	callback       uintptr
 }
 
-func wide(s string) []uint16     { return append(utf16.Encode([]rune(s)), 0) }
-func ptr(s string) *uint16       { return &wide(s)[0] }
-func (w *Window) px(n int) int32 { return int32(math.Round(float64(n) * w.scale)) }
+func wide(s string) []uint16 { return append(utf16.Encode([]rune(s)), 0) }
+func ptr(s string) *uint16   { return &wide(s)[0] }
 
-func New(title string, width, height int) (*Window, error) {
+// px turns a length of the layout into pixels on this screen.
+func (w *Window) px(n int) int          { return int(math.Round(float64(n) * w.scale)) }
+func (w *Window) pxf(n float64) float64 { return n * w.scale }
+
+// Signal sends a number to the window of a copy of the program that is
+// already running, which receives it through OnSignal. It reports whether
+// there was such a copy.
+func Signal(class string, command int) bool {
+	h, _, _ := user32.NewProc("FindWindowW").Call(uintptr(unsafe.Pointer(ptr(class))), 0)
+	if h == 0 {
+		return false
+	}
+	user32.NewProc("AllowSetForegroundWindow").Call(^uintptr(0)) // so it may come to the front
+	postMessage.Call(h, wmSignal, uintptr(command), 0)
+	return true
+}
+
+// OnSignal sets the function that receives numbers sent with Signal.
+func (w *Window) OnSignal(signal func(command int)) { w.signal = signal }
+
+// New creates the main window with a fixed layout of the given size. The
+// window has no frame from Windows: it draws its own top, by which it can
+// be dragged, and its own buttons to minimise and close.
+func New(title, class string, width, height int) (*Window, error) {
 	runtime.LockOSThread()
 	user32.NewProc("SetProcessDPIAware").Call()
 	dpi := uintptr(96)
@@ -79,7 +178,12 @@ func New(title string, width, height int) (*Window, error) {
 	if dpi == 0 {
 		dpi = 96
 	}
-	w := &Window{scale: float64(dpi) / 96, pages: map[int][]uintptr{}, actions: map[uintptr]func(){}, notifications: map[uintptr]func(){}, icons: map[uintptr]uintptr{}, nextID: 100, page: -1}
+	w := &Window{scale: float64(dpi) / 96, width: width, height: height, page: -1, pick: -1, build: windowsBuild()}
+	// For trying the layout at another size without changing Windows' own
+	// setting: LAZABINDER_SCALE=150 draws everything at 150%.
+	if percent, err := strconv.Atoi(os.Getenv("LAZABINDER_SCALE")); err == nil && percent >= 50 && percent <= 400 {
+		w.scale = float64(percent) / 100
+	}
 	screenWidth, _, _ := user32.NewProc("GetSystemMetrics").Call(0)
 	screenHeight, _, _ := user32.NewProc("GetSystemMetrics").Call(1)
 	// Keep the complete fixed layout visible even with a small screen or high scaling.
@@ -87,278 +191,337 @@ func New(title string, width, height int) (*Window, error) {
 	if w.scale < 0.7 {
 		w.scale = 0.7
 	}
-	instance, _, _ := kernel32.NewProc("GetModuleHandleW").Call(0)
-	brush, _, _ := gdi32.NewProc("CreateSolidBrush").Call(0x00fafafa)
+	w.instance, _, _ = kernel32.NewProc("GetModuleHandleW").Call(0)
 	cursor, _, _ := user32.NewProc("LoadCursorW").Call(0, 32512)
-	icon, _, _ := loadImage.Call(instance, 1, 1, 32, 32, 0)
-	w.callback = syscall.NewCallback(func(hwnd uintptr, msg uint32, wp, lp uintptr) uintptr {
-		switch msg {
-		case 0x0111: // WM_COMMAND
-			id := wp & 0xffff
-			notification := (wp >> 16) & 0xffff
-			if notification == 0 {
-				if action := w.actions[id]; action != nil {
-					action()
-					return 0
-				}
-			}
-			if notification == 1 {
-				if action := w.notifications[id]; action != nil {
-					action()
-					return 0
-				}
-			}
-		case 0x8001:
-			w.lock.Lock()
-			jobs := w.jobs
-			w.jobs = nil
-			w.lock.Unlock()
-			for _, job := range jobs {
-				job()
-			}
-			return 0
-		case 0x0010:
-			user32.NewProc("DestroyWindow").Call(hwnd)
-			return 0
-		case 0x0002:
-			user32.NewProc("PostQuitMessage").Call(0)
-			return 0
-		}
-		result, _, _ := user32.NewProc("DefWindowProcW").Call(hwnd, uintptr(msg), wp, lp)
-		return result
-	})
-	className := ptr("LazaBinderNativeWindow")
-	class := windowClass{Style: 3, Procedure: w.callback, Instance: instance, Icon: icon, SmallIcon: icon, Cursor: cursor, Background: brush, ClassName: className}
-	class.Size = uint32(unsafe.Sizeof(class))
-	ok, _, e := user32.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&class)))
+	icon, _, _ := loadImage.Call(w.instance, 1, 1, 32, 32, 0)
+	small, _, _ := loadImage.Call(w.instance, 1, 1, 16, 16, 0)
+	w.callback = syscall.NewCallback(w.handle)
+	className := ptr(class)
+	wc := windowClass{Procedure: w.callback, Instance: w.instance, Icon: icon, SmallIcon: small, Cursor: cursor, ClassName: className}
+	wc.Size = uint32(unsafe.Sizeof(wc))
+	ok, _, e := user32.NewProc("RegisterClassExW").Call(uintptr(unsafe.Pointer(&wc)))
 	if ok == 0 {
 		return nil, fmt.Errorf("could not register window: %w", e)
 	}
-	style := uintptr(0x00ca0000)
-	r := rect{Right: w.px(width), Bottom: w.px(height)}
-	user32.NewProc("AdjustWindowRectEx").Call(uintptr(unsafe.Pointer(&r)), style, 0, 0)
-	sw, _, _ := user32.NewProc("GetSystemMetrics").Call(0)
-	sh, _, _ := user32.NewProc("GetSystemMetrics").Call(1)
-	winWidth, winHeight := r.Right-r.Left, r.Bottom-r.Top
-	x, y := (int32(sw)-winWidth)/2, (int32(sh)-winHeight)/2
-	if x < 0 {
-		x = 0
-	}
-	if y < 0 {
-		y = 0
-	}
-	h, _, e := createWindow.Call(0, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(ptr(title))), style, uintptr(x), uintptr(y), uintptr(winWidth), uintptr(winHeight), 0, 0, instance, 0)
+	// A window with no frame, on the taskbar, that can be minimised. "Layered"
+	// is what lets each pixel have its own opacity.
+	const popup, systemMenu, minimiseBox = 0x80000000, 0x00080000, 0x00020000
+	const layered, onTaskbar = 0x00080000, 0x00040000
+	winWidth, winHeight := w.px(width), w.px(height)
+	x, y := max((int(screenWidth)-winWidth)/2, 0), max((int(screenHeight)-winHeight)/2, 0)
+	h, _, e := createWindow.Call(layered|onTaskbar, uintptr(unsafe.Pointer(className)), uintptr(unsafe.Pointer(ptr(title))),
+		popup|systemMenu|minimiseBox, uintptr(x), uintptr(y), uintptr(winWidth), uintptr(winHeight), 0, 0, w.instance, 0)
 	if h == 0 {
 		return nil, fmt.Errorf("could not create window: %w", e)
 	}
 	w.Handle = h
-	w.font = w.makeFont(16, 400)
-	w.titleFont = w.makeFont(30, 700)
-	w.headingFont = w.makeFont(20, 600)
+	var err error
+	if w.picture, err = newSurface(winWidth, winHeight); err != nil {
+		return nil, err
+	}
+	if w.stencil, err = newSurface(winWidth, winHeight); err != nil {
+		return nil, err
+	}
+	w.canvas = NewCanvas(w.picture.pix, winWidth, winHeight)
+	w.fonts.body = w.makeFont(15, 400)
+	w.fonts.strong = w.makeFont(15, 600)
+	w.fonts.small = w.makeFont(13, 400)
+	w.fonts.heading = w.makeFont(20, 600)
+	w.fonts.title = w.makeFont(28, 700)
+	w.backdrop()
+	// Explorer announces itself with this message when it restarts, and the
+	// notification area icon has to be put back.
+	created, _, _ := user32.NewProc("RegisterWindowMessageW").Call(uintptr(unsafe.Pointer(ptr("TaskbarCreated"))))
+	w.taskbarCreated = uint32(created)
 	return w, nil
 }
 
-func (w *Window) makeFont(size, weight int) uintptr {
-	height := w.px(-size)
-	font, _, _ := gdi32.NewProc("CreateFontW").Call(uintptr(height), 0, 0, 0, uintptr(weight), 0, 0, 0, 1, 0, 0, 5, 0, uintptr(unsafe.Pointer(ptr("Segoe UI"))))
-	return font
+// handle is the window procedure.
+func (w *Window) handle(hwnd uintptr, msg uint32, wp uintptr, lp unsafe.Pointer) uintptr {
+	// Whatever the message changed is redrawn once, when it has been dealt with.
+	defer w.flush()
+	switch msg {
+	case wmEnterSizeMove: // the window is being moved from its menu, with the arrow keys
+		if w.frosted {
+			w.frost(true)
+		}
+	case wmExitSizeMove:
+		if w.frosted {
+			w.frost(false)
+		}
+	case wmMouseMove:
+		x, y := w.position(lp)
+		w.pointerMoved(x, y)
+		return 0
+	case wmMouseWheel:
+		// The wheel turns the table the pointer is over.
+		if w.open != nil {
+			w.first -= 3 * int(int16(wp>>16)) / 120
+			w.listShow(max(w.first, 0))
+		} else if c := w.hover; c != nil && c.kind == kindTable {
+			c.scrollTo(c.table.top - 3*int(int16(wp>>16))/120)
+		}
+		return 0
+	case wmDropFiles:
+		w.dropped(wp)
+		return 0
+	case wmMouseLeave:
+		w.tracking = false
+		w.hoverOn(nil)
+		return 0
+	case wmLButtonDown, wmLButtonDouble:
+		x, y := w.position(lp)
+		w.pointerDown(x, y)
+		return 0
+	case wmLButtonUp:
+		x, y := w.position(lp)
+		w.pointerUp(x, y)
+		return 0
+	case wmCaptureChanged:
+		if w.pressed != nil {
+			w.pressed.redraw()
+			w.pressed = nil
+		}
+		if w.dragging && uintptr(lp) != hwnd {
+			w.letGo()
+		}
+		return 0
+	case wmKeyDown, wmSysKeyDown:
+		if w.keyDown(uint32(wp), uintptr(lp)&(1<<30) != 0, msg == wmSysKeyDown) {
+			return 0
+		}
+	case wmChar:
+		if c := w.focus; c != nil && c.kind == kindInput {
+			c.inputChar(rune(wp))
+			return 0
+		}
+	case wmSysChar:
+		if w.setting() {
+			return 0 // or Windows would beep at Alt with a letter
+		}
+	case wmSysCommand:
+		if wp&0xFFF0 == 0xF100 && w.setting() {
+			return 0 // Alt on its own would open the window's menu
+		}
+	case wmActivate:
+		w.active = wp&0xFFFF != 0
+		if !w.active {
+			w.closeList()
+		}
+		if w.focus != nil {
+			w.focus.redraw()
+		}
+	case wmSize:
+		// Minimised, the window has nothing to show, so nothing is worked out.
+		if wp == 1 {
+			killTimer.Call(hwnd, 1)
+		} else if wp == 0 && w.tick != nil {
+			w.tick()
+			setTimer.Call(hwnd, 1, uintptr(w.interval), 0)
+			w.redrawAll()
+		}
+	case wmEraseBackdrop:
+		return 1
+	case wmMeasureItem:
+		if w.measureMenu((*measureItem)(lp)) {
+			return 1
+		}
+	case wmDrawItem:
+		if w.drawMenu((*drawItem)(lp)) {
+			return 1
+		}
+	case wmTimer:
+		if w.tick != nil {
+			w.tick()
+		}
+		return 0
+	case wmHotkey:
+		// A shortcut pressed while it is being chosen is not meant as a shortcut.
+		if w.hotkey != nil && !(w.active && w.setting()) {
+			w.hotkey(int(wp))
+		}
+		return 0
+	case wmTray:
+		w.trayEvent(uint32(uintptr(lp)))
+		return 0
+	case wmSignal:
+		if w.signal != nil {
+			w.signal(int(wp))
+		}
+		return 0
+	case wmJobs:
+		w.lock.Lock()
+		jobs := w.jobs
+		w.jobs = nil
+		w.lock.Unlock()
+		for _, job := range jobs {
+			job()
+		}
+		return 0
+	case wmClose:
+		if w.closing != nil && !w.closing() {
+			return 0
+		}
+		user32.NewProc("DestroyWindow").Call(hwnd)
+		return 0
+	case wmDestroy:
+		w.RemoveTray()
+		user32.NewProc("PostQuitMessage").Call(0)
+		return 0
+	}
+	if msg == w.taskbarCreated && w.tray != nil {
+		w.tray.added = false
+		w.tray.show(w)
+	}
+	result, _, _ := defWindowProc.Call(hwnd, uintptr(msg), wp, uintptr(lp))
+	return result
 }
 
-func (w *Window) control(class, text string, style uintptr, x, y, width, height int, action func()) uintptr {
-	id := w.nextID
-	w.nextID++
-	extended := uintptr(0)
-	if class == "EDIT" {
-		extended = 0x200
-	}
-	h, _, _ := createWindow.Call(extended, uintptr(unsafe.Pointer(ptr(class))), uintptr(unsafe.Pointer(ptr(text))), 0x50000000|style, uintptr(w.px(x)), uintptr(w.px(y)), uintptr(w.px(width)), uintptr(w.px(height)), w.Handle, id, 0, 0)
-	sendMessage.Call(h, 0x0030, w.font, 1)
-	w.controls = append(w.controls, h)
-	if w.page >= 0 {
-		w.pages[w.page] = append(w.pages[w.page], h)
-	}
-	if action != nil {
-		w.actions[id] = action
-	}
-	return h
+// position reads the two coordinates Windows packs into one number.
+func (w *Window) position(lp unsafe.Pointer) (x, y int) {
+	packed := uintptr(lp)
+	return int(int16(packed)), int(int16(packed >> 16))
 }
 
-func (w *Window) Common()       { w.page = -1 }
-func (w *Window) Page(page int) { w.page = page }
-func (w *Window) ShowPage(page int) {
-	for n, handles := range w.pages {
-		for _, h := range handles {
-			show := uintptr(0)
-			if n == page {
-				show = 5
-			}
-			showWindow.Call(h, show)
+// held returns the modifier keys that are down.
+func held() uint32 {
+	var modifiers uint32
+	for key, modifier := range map[uintptr]uint32{vkShift: Shift, vkControl: Ctrl, vkMenu: Alt} {
+		if state, _, _ := getKeyState.Call(key); state&0x8000 != 0 {
+			modifiers |= modifier
 		}
 	}
+	return modifiers
 }
-func (w *Window) Label(text string, x, y, width, height int) uintptr {
-	return w.control("STATIC", text, 0, x, y, width, height, nil)
-}
-func (w *Window) Title(text string, x, y, width, height int) uintptr {
-	h := w.Label(text, x, y, width, height)
-	sendMessage.Call(h, 0x0030, w.titleFont, 1)
-	return h
-}
-func (w *Window) Heading(text string, x, y, width, height int) uintptr {
-	h := w.Label(text, x, y, width, height)
-	sendMessage.Call(h, 0x0030, w.headingFont, 1)
-	return h
-}
-func (w *Window) Edit(text string, x, y, width, height int, readonly bool) uintptr {
-	style := uintptr(0x10080)
-	if readonly {
-		style |= 0x800
+
+// Page makes the controls created next belong to one page. Controls
+// created before the first call are on show whichever page is.
+func (w *Window) Page(page int) { w.page = page }
+
+// ShowPage puts a page on show.
+func (w *Window) ShowPage(page int) {
+	w.closeList()
+	w.current = page
+	if w.focus != nil && !w.focus.showing() {
+		w.focus = nil
 	}
-	return w.control("EDIT", text, style, x, y, width, height, nil)
-}
-func (w *Window) Button(text string, x, y, width, height int, action func()) uintptr {
-	return w.control("BUTTON", text, 0x10000, x, y, width, height, action)
-}
-func (w *Window) Checkbox(text string, x, y, width, height int) uintptr {
-	return w.control("BUTTON", text, 0x10003, x, y, width, height, nil)
-}
-func (w *Window) Checked(h uintptr) bool { r, _, _ := sendMessage.Call(h, 0x00f0, 0, 0); return r == 1 }
-func (w *Window) SetChecked(h uintptr, checked bool) {
-	value := uintptr(0)
-	if checked {
-		value = 1
-	}
-	sendMessage.Call(h, 0x00f1, value, 0)
-}
-func (w *Window) Text(h uintptr) string {
-	n, _, _ := getTextLength.Call(h)
-	buffer := make([]uint16, n+1)
-	getText.Call(h, uintptr(unsafe.Pointer(&buffer[0])), n+1)
-	return syscall.UTF16ToString(buffer)
-}
-func (w *Window) SetText(h uintptr, text string) { setText.Call(h, uintptr(unsafe.Pointer(ptr(text)))) }
-func (w *Window) Enable(h uintptr, enabled bool) {
-	b := uintptr(0)
-	if enabled {
-		b = 1
-	}
-	enableWindow.Call(h, b)
-}
-func (w *Window) Combo(x, y, width, height int, onChange func()) uintptr {
-	h := w.control("COMBOBOX", "", 0x10000|0x200000|0x0003, x, y, width, height, nil)
-	id, _, _ := user32.NewProc("GetDlgCtrlID").Call(h)
-	w.notifications[id] = onChange
-	return h
-}
-func (w *Window) SetItems(h uintptr, items []string) {
-	sendMessage.Call(h, 0x014b, 0, 0)
-	for _, item := range items {
-		sendMessage.Call(h, 0x0143, 0, uintptr(unsafe.Pointer(ptr(item))))
-	}
-	if len(items) > 0 {
-		sendMessage.Call(h, 0x014e, 0, 0)
+	w.hover = nil
+	w.redrawAll()
+	if w.shown != nil {
+		w.shown(page)
 	}
 }
-func (w *Window) Selection(h uintptr) int {
-	r, _, _ := sendMessage.Call(h, 0x0147, 0, 0)
-	return int(int32(r))
-}
-func (w *Window) IconControl(x, y, size int) uintptr {
-	return w.control("STATIC", "", 3, x, y, size, size, nil)
-}
-func (w *Window) Preview(h uintptr, path string) {
-	icon := uintptr(0)
-	if path != "" {
-		icon, _, _ = loadImage.Call(0, uintptr(unsafe.Pointer(ptr(path))), 1, uintptr(w.px(64)), uintptr(w.px(64)), 0x10)
+
+// OnPage sets a function that is called whenever a page is shown.
+func (w *Window) OnPage(shown func(page int)) { w.shown = shown }
+
+// Grip sets how far down from its top edge the window can be dragged by.
+func (w *Window) Grip(height int) { w.grip = height }
+
+// Every calls tick on the window's thread at the given interval in
+// milliseconds for as long as the window is on show. A hidden or minimised
+// window gets no calls at all, so it costs nothing; tick runs once more the
+// moment the window is shown again.
+func (w *Window) Every(milliseconds int, tick func()) {
+	w.tick, w.interval = tick, milliseconds
+	if w.Visible() {
+		setTimer.Call(w.Handle, 1, uintptr(milliseconds), 0)
 	}
-	sendMessage.Call(h, 0x0172, 1, icon)
-	if old := w.icons[h]; old != 0 {
-		destroyIcon.Call(old)
+}
+
+// OnClose sets a function that is asked when the window is about to close.
+// When it returns false the window stays.
+func (w *Window) OnClose(closing func() bool) { w.closing = closing }
+
+// SetHotkey registers a key combination that works whichever program is in
+// front. id tells combinations apart when one is pressed.
+func (w *Window) SetHotkey(id int, key, modifiers uint32) error {
+	user32.NewProc("UnregisterHotKey").Call(w.Handle, uintptr(id))
+	if key == 0 {
+		return nil
 	}
-	w.icons[h] = icon
+	const noRepeat = 0x4000
+	ok, _, _ := user32.NewProc("RegisterHotKey").Call(w.Handle, uintptr(id), uintptr(modifiers|noRepeat), uintptr(key))
+	if ok == 0 {
+		return fmt.Errorf("another program is already using that shortcut")
+	}
+	return nil
 }
-func (w *Window) Alert(title, text string) {
-	user32.NewProc("MessageBoxW").Call(w.Handle, uintptr(unsafe.Pointer(ptr(text))), uintptr(unsafe.Pointer(ptr(title))), 0x10)
+
+// OnHotkey sets the function called when a registered combination is pressed.
+func (w *Window) OnHotkey(pressed func(id int)) { w.hotkey = pressed }
+
+// Show brings the window to the front, restoring it if it was hidden or minimised.
+func (w *Window) Show() {
+	if w.tick != nil {
+		w.tick()
+	}
+	w.draw(w.whole()) // so that it appears complete, not as it was when hidden
+	if minimised, _, _ := isIconic.Call(w.Handle); minimised != 0 {
+		showWindow.Call(w.Handle, 9)
+	} else {
+		showWindow.Call(w.Handle, 5)
+	}
+	setForeground.Call(w.Handle)
+	if w.tick != nil {
+		setTimer.Call(w.Handle, 1, uintptr(w.interval), 0)
+	}
 }
-func (w *Window) Info(title, text string) {
-	user32.NewProc("MessageBoxW").Call(w.Handle, uintptr(unsafe.Pointer(ptr(text))), uintptr(unsafe.Pointer(ptr(title))), 0x40)
+
+// Hide takes the window off the screen and the taskbar.
+func (w *Window) Hide() {
+	killTimer.Call(w.Handle, 1)
+	w.closeList()
+	showWindow.Call(w.Handle, 0)
 }
+
+// Visible reports whether the window can be seen.
+func (w *Window) Visible() bool {
+	visible, _, _ := isWindowVisible.Call(w.Handle)
+	minimised, _, _ := isIconic.Call(w.Handle)
+	return visible != 0 && minimised == 0
+}
+
+// Close ends the program, whatever OnClose would say.
+func (w *Window) Close() {
+	w.closing = nil
+	user32.NewProc("DestroyWindow").Call(w.Handle)
+}
+
+// Chime plays the plain notification sound of Windows.
+func (w *Window) Chime() { user32.NewProc("MessageBeep").Call(0x40) }
+
+// Warn plays the sound Windows uses when something needs attention.
+func (w *Window) Warn() { user32.NewProc("MessageBeep").Call(0x30) }
+
+// Post runs a function on the window's thread. Background work uses it to update the interface.
 func (w *Window) Post(job func()) {
 	w.lock.Lock()
 	w.jobs = append(w.jobs, job)
 	w.lock.Unlock()
-	postMessage.Call(w.Handle, 0x8001, 0, 0)
+	postMessage.Call(w.Handle, wmJobs, 0, 0)
 }
+
+// Run shows the window and handles its messages until it closes.
 func (w *Window) Run() {
-	showWindow.Call(w.Handle, 5)
-	user32.NewProc("UpdateWindow").Call(w.Handle)
+	w.Show()
 	var msg message
 	for {
 		r, _, _ := user32.NewProc("GetMessageW").Call(uintptr(unsafe.Pointer(&msg)), 0, 0, 0)
 		if r == 0 || int32(r) == -1 {
 			break
 		}
-		isDialog, _, _ := user32.NewProc("IsDialogMessageW").Call(w.Handle, uintptr(unsafe.Pointer(&msg)))
-		if isDialog != 0 {
-			continue
-		}
 		user32.NewProc("TranslateMessage").Call(uintptr(unsafe.Pointer(&msg)))
 		user32.NewProc("DispatchMessageW").Call(uintptr(unsafe.Pointer(&msg)))
 	}
-	for _, h := range w.icons {
-		if h != 0 {
-			destroyIcon.Call(h)
-		}
+	for _, object := range []uintptr{w.fonts.body, w.fonts.strong, w.fonts.small, w.fonts.heading, w.fonts.title} {
+		deleteObject.Call(object)
 	}
-	for _, font := range []uintptr{w.font, w.titleFont, w.headingFont} {
-		gdi32.NewProc("DeleteObject").Call(font)
-	}
+	w.picture.close()
+	w.stencil.close()
 }
 
-type openFileName struct {
-	Size                         uint32
-	Owner, Instance              uintptr
-	Filter, CustomFilter         *uint16
-	MaxCustomFilter, FilterIndex uint32
-	File                         *uint16
-	MaxFile                      uint32
-	FileTitle                    *uint16
-	MaxFileTitle                 uint32
-	InitialDir, Title            *uint16
-	Flags                        uint32
-	FileOffset, FileExtension    uint16
-	DefaultExtension             *uint16
-	CustomData, Hook             uintptr
-	TemplateName                 *uint16
-	Reserved                     uintptr
-	ReservedDWORD, FlagsEx       uint32
-}
-
-func (w *Window) FileDialog(title, filter, extension, suggested string, save bool) (string, error) {
-	buffer := make([]uint16, 32768)
-	copy(buffer, wide(suggested))
-	filterData := wide(filter)
-	config := openFileName{Owner: w.Handle, Filter: &filterData[0], File: &buffer[0], MaxFile: uint32(len(buffer)), Title: ptr(title), DefaultExtension: ptr(extension), FilterIndex: 1, Flags: 0x80000 | 0x800 | 0x8 | 0x4}
-	config.Size = uint32(unsafe.Sizeof(config))
-	proc := comdlg32.NewProc("GetOpenFileNameW")
-	if save {
-		proc = comdlg32.NewProc("GetSaveFileNameW")
-		config.Flags |= 2
-	} else {
-		config.Flags |= 0x1000
-	}
-	ok, _, _ := proc.Call(uintptr(unsafe.Pointer(&config)))
-	runtime.KeepAlive(filterData)
-	if ok == 0 {
-		code, _, _ := comdlg32.NewProc("CommDlgExtendedError").Call()
-		if code != 0 {
-			return "", fmt.Errorf("file dialog error 0x%x", code)
-		}
-		return "", nil
-	}
-	return syscall.UTF16ToString(buffer), nil
-}
-
+// OpenFolder shows a folder in Explorer.
 func (w *Window) OpenFolder(path string) {
 	r, _, _ := shell32.NewProc("ShellExecuteW").Call(w.Handle, uintptr(unsafe.Pointer(ptr("open"))), uintptr(unsafe.Pointer(ptr(path))), 0, 0, 1)
 	if r <= 32 {
@@ -366,6 +529,44 @@ func (w *Window) OpenFolder(path string) {
 	}
 }
 
-func Fatal(err error) {
-	user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(ptr(err.Error()))), uintptr(unsafe.Pointer(ptr("LazaBinder"))), 0x10)
+// Reveal opens the folder of a file in Explorer with the file selected.
+func (w *Window) Reveal(path string) {
+	arguments := `/select,"` + path + `"`
+	shell32.NewProc("ShellExecuteW").Call(w.Handle, uintptr(unsafe.Pointer(ptr("open"))), uintptr(unsafe.Pointer(ptr("explorer.exe"))), uintptr(unsafe.Pointer(ptr(arguments))), 0, 1)
+}
+
+// VideosFolder returns the user's Videos folder, or "" when Windows cannot say.
+func VideosFolder() string {
+	videos := guid{0x18989B1D, 0x99B5, 0x455B, [8]byte{0x84, 0x1C, 0xAB, 0x7C, 0x74, 0xE4, 0xDD, 0xFC}}
+	var path *uint16
+	r, _, _ := shell32.NewProc("SHGetKnownFolderPath").Call(uintptr(unsafe.Pointer(&videos)), 0, 0, uintptr(unsafe.Pointer(&path)))
+	if r != 0 || path == nil {
+		return ""
+	}
+	defer ole32.NewProc("CoTaskMemFree").Call(uintptr(unsafe.Pointer(path)))
+	return syscall.UTF16ToString((*[32768]uint16)(unsafe.Pointer(path))[:])
+}
+
+// KeyName returns the name Windows gives a key, such as F9 or Page Up.
+func KeyName(key uint32) string {
+	switch {
+	case key >= 0x70 && key <= 0x87:
+		return fmt.Sprintf("F%d", key-0x6F)
+	case key >= '0' && key <= '9', key >= 'A' && key <= 'Z':
+		return string(rune(key))
+	}
+	scan, _, _ := user32.NewProc("MapVirtualKeyW").Call(uintptr(key), 0)
+	if key >= 0x21 && key <= 0x2E {
+		scan |= 0x100 // the arrow, paging and editing keys share codes with the number pad
+	}
+	buffer := make([]uint16, 64)
+	if n, _, _ := user32.NewProc("GetKeyNameTextW").Call(scan<<16, uintptr(unsafe.Pointer(&buffer[0])), uintptr(len(buffer))); n > 0 {
+		return syscall.UTF16ToString(buffer)
+	}
+	return fmt.Sprintf("key %d", key)
+}
+
+// Fatal reports an error that stops the app from starting.
+func Fatal(title string, err error) {
+	user32.NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(ptr(err.Error()))), uintptr(unsafe.Pointer(ptr(title))), 0x10)
 }

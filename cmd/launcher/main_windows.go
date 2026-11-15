@@ -8,16 +8,26 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+	"syscall"
+	"unsafe"
 
 	"lazabinder/internal/bundle"
 	"lazabinder/internal/launch"
-	"lazabinder/internal/winui"
 )
 
 func main() {
 	if err := run(); err != nil {
-		winui.Fatal(err)
+		fatal(err)
 	}
+}
+
+// fatal reports why the bundle could not start, in a box from Windows. The
+// launcher is copied into every bundle, so it carries none of the window
+// code of LazaBinder itself.
+func fatal(err error) {
+	text, _ := syscall.UTF16PtrFromString(err.Error())
+	title, _ := syscall.UTF16PtrFromString("LazaBinder")
+	syscall.NewLazyDLL("user32.dll").NewProc("MessageBoxW").Call(0, uintptr(unsafe.Pointer(text)), uintptr(unsafe.Pointer(title)), 0x10)
 }
 
 // Successful startup has no wrapper window. Run returns after both programs
